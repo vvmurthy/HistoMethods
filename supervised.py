@@ -13,23 +13,35 @@ import scipy.io as sio
 import lasagne
 import theano
 import theano.tensor as T
+import sklearn.metrics as m
 
-
+def onehot_to_vector(labels):
+    x = len(labels)
+    vector = np.zeros((x,4))
+    for k in range(x):
+        vector[k,labels[k]] = 1
+    return vector
+        
 
 def read_data():
-    images = np.zeros((100,500,500,3), dtype=np.float32)
+    images = np.zeros((100,500,500,3), dtype=np.uint8)
     path = "/home/veda/ColonHistology/CRCHistoPhenotypes_2016_04_28/Classification/"
     for i in range(1,101):
         filename = "img" + str(i)
         fullpath = path + filename + "/" + filename + ".bmp" 
         images[i-1,:,:,:] = misc.imread(fullpath)
+    
     return images
 
 "Labels are in the form [epithelial, fibroblast, inflammatory, other]"
 def create_dataset(images):
-    data = np.zeros((0,3,27,27)).astype(np.float32)
+    data = np.zeros((0,3,27,27)).astype(np.uint8)
     labels = np.zeros((0,1)).astype(np.int8)
     r = 13
+    no_fibroblast = 0
+    no_epithelial = 0
+    no_inflammatory = 0
+    no_others = 0
     
     #take 1 500x500 image
     for k in range(0,100):
@@ -38,22 +50,27 @@ def create_dataset(images):
             print("Loading Image " + str(k) + " of 100")
         
         
-        image = images[k].astype(np.float32)
-        image = np.swapaxes(np.swapaxes(image, 1, 2), 0, 1)
+        image = images[k]
      
-        
         fibroblast = sio.loadmat("/home/veda/ColonHistology/CRCHistoPhenotypes_2016_04_28/Classification/img" + str(k+1) + "/img" + 
                                  str(k+1) +"_fibroblast")
         coors = fibroblast["detection"]
         if(coors.shape[0] > 0):
-            for i in range(0,coors.size/2):
-                y = np.min((500-14,coors[i,0]))
-                y = np.max((13,y)).astype(np.int32)
-                x = np.min((500-14,coors[i,1]))
-                x = np.max((13,x)).astype(np.int32)
-                add = np.expand_dims(image[:,x-r:x+r+1,y-r:y+r+1],axis=0)
-                data = np.concatenate((add,data))
-                labels = np.append(labels,1)
+            for i in range(0,coors.shape[0]):
+                
+                y = coors[i,0]
+                y = y.astype(np.int32)
+                x = coors[i,1]
+                x = x.astype(np.int32)
+                
+                
+                if(y > 26 and y < 474 and x > 26 and x < 474):
+                    add = image[x-r:x+r+1,y-r:y+r+1,:]
+                    add = np.swapaxes(np.swapaxes(add, 1, 2), 0, 1)
+                    add = np.expand_dims(add,axis=0)
+                    data = np.concatenate((add,data))
+                    labels = np.append(labels,1)
+                    no_fibroblast += 1
                 
                 #label_vector = np.expand_dims(np.array([0,1,0,0]),axis=0)
               #  labels = np.concatenate((label_vector,labels),axis=0)
@@ -62,56 +79,70 @@ def create_dataset(images):
                                  str(k+1) +"_epithelial")
         coors = epithelial["detection"]
         if(coors.shape[0] > 0):
-            for i in range(0,coors.size/2):
-                y = np.min((500-14,coors[i,0]))
-                y = np.max((13,y)).astype(np.int32)
-                x = np.min((500-14,coors[i,1]))
-                x = np.max((13,x)).astype(np.int32)
-                add = np.expand_dims(image[:,x-r:x+r+1,y-r:y+r+1],axis=0)
-                data = np.concatenate((add,data))
-                #label_vector = np.expand_dims(np.array([0]),axis=0)
-                labels = np.append(labels,0)
-                #label_vector = np.expand_dims(np.array([1,0,0,0]),axis=0)
-               # labels = np.concatenate((label_vector,labels),axis=0)
-            
+            for i in range(0,coors.shape[0]):
+                
+                y = coors[i,0]
+                y = y.astype(np.int32)
+                x = coors[i,1]
+                x = x.astype(np.int32)
+                
+                
+                if(y > 26 and y < 474 and x > 26 and x < 474):
+                    add = image[x-r:x+r+1,y-r:y+r+1,:]
+                    add = np.swapaxes(np.swapaxes(add, 1, 2), 0, 1)
+                    add = np.expand_dims(add,axis=0)
+                    data = np.concatenate((add,data))
+                    labels = np.append(labels,0)
+                    no_epithelial += 1
+                    
         inflammatory = sio.loadmat("/home/veda/ColonHistology/CRCHistoPhenotypes_2016_04_28/Classification/img" + str(k+1) + "/img" + 
                                  str(k+1) +"_inflammatory")
         coors = inflammatory["detection"]
-        
         if(coors.shape[0] > 0):
-            for i in range(0,coors.size/2):
-                y = np.min((500-14,coors[i,0]))
-                y = np.max((13,y)).astype(np.int32)
-                x = np.min((500-14,coors[i,1]))
-                x = np.max((13,x)).astype(np.int32)
-                add = np.expand_dims(image[:,x-r:x+r+1,y-r:y+r+1],axis=0)
-                data = np.concatenate((add,data))
-                #label_vector = np.expand_dims(np.array([2]),axis=0)
-                labels = np.append(labels,2)
-                #label_vector = np.expand_dims(np.array([0,0,1,0]),axis=0)
-                #labels = np.concatenate((label_vector,labels),axis=0)
+            for i in range(0,coors.shape[0]):
                 
+                y = coors[i,0]
+                y = y.astype(np.int32)
+                x = coors[i,1]
+                x = x.astype(np.int32)
+                
+                
+                if(y > 26 and y < 474 and x > 26 and x < 474):
+                    add = image[x-r:x+r+1,y-r:y+r+1,:]
+                    add = np.swapaxes(np.swapaxes(add, 1, 2), 0, 1)
+                    add = np.expand_dims(add,axis=0)
+                    data = np.concatenate((add,data))
+                    labels = np.append(labels,2)
+                    no_inflammatory += 1
           
         others = sio.loadmat("/home/veda/ColonHistology/CRCHistoPhenotypes_2016_04_28/Classification/img" + str(k+1) + "/img" + 
                                  str(k+1) +"_others")
         coors = others["detection"]
         if(coors.shape[0] > 0):
-            for i in range(0,coors.size/2):
-                y = coors[i,0].astype(np.int32)
-                x = coors[i,1].astype(np.int32)
+            for i in range(0,coors.shape[0]):
                 
-                y = np.min((500-14,coors[i,0]))
-                y = np.max((13,y)).astype(np.int32)
-                x = np.min((500-14,coors[i,1]))
-                x = np.max((13,x)).astype(np.int32)
-                add = np.expand_dims(image[:,x-r:x+r+1,y-r:y+r+1],axis=0)
-                data = np.concatenate((add,data))
-                #label_vector = np.expand_dims(np.array([3]),axis=0)
-                labels = np.append(labels,3)
-                #label_vector = np.expand_dims(np.array([0,0,0,1]),axis=0)
-                #labels = np.concatenate((label_vector,labels),axis=0)
-     
+                y = coors[i,0]
+                y = y.astype(np.int32)
+                x = coors[i,1]
+                x = x.astype(np.int32)
                 
+                
+                if(y > 26 and y < 474 and x > 26 and x < 474):
+                    add = image[x-r:x+r+1,y-r:y+r+1,:]
+                    add = np.swapaxes(np.swapaxes(add, 1, 2), 0, 1)
+                    add = np.expand_dims(add,axis=0)
+                    data = np.concatenate((add,data))
+                    labels = np.append(labels,3)
+                    no_others += 1
+    
+                    
+    print("Number of Fibroblasts: " + str(no_fibroblast)
+    + " Number of Epithelial: " + str(no_epithelial) + 
+    " Number of inflammatory: " + str(no_inflammatory) + 
+    " Number of others: " + str(no_others))
+    data = data.astype(np.float32)
+    data = data / 255
+    data = (data - np.mean(data)) / np.std(data)          
     labels = labels.astype(np.int32)
     return data, labels
     
@@ -161,8 +192,7 @@ def check_coordinates(images):
         imgplot = plt.imshow(image.astype(np.uint8))
         return coors
 
-#this is temporary until CNN architecture is created to match the paper
-#Based off lasagne tutorial code
+#this is temporary until CNN architecture is created to match the paper 
 def build_cnn(input_var=None):
 
     network = lasagne.layers.InputLayer(shape=(None, 3, 27, 27),
@@ -170,19 +200,15 @@ def build_cnn(input_var=None):
     print(lasagne.layers.get_output_shape(network))
 
     network = lasagne.layers.Conv2DLayer(
-    network, num_filters=32, filter_size=(3, 3),
-    nonlinearity=lasagne.nonlinearities.rectify)
-    print(lasagne.layers.get_output_shape(network))
-
-    
-    network = lasagne.layers.Conv2DLayer(
-    network, num_filters=32, filter_size=(3, 3),
+    network, num_filters=36, filter_size=(4, 4),
     nonlinearity=lasagne.nonlinearities.rectify)
     print(lasagne.layers.get_output_shape(network))
     
+    network = lasagne.layers.MaxPool2DLayer(network, pool_size=(2, 2))
+    print(lasagne.layers.get_output_shape(network))
     
     network = lasagne.layers.Conv2DLayer(
-    network, num_filters=32, filter_size=(4, 4),
+    network, num_filters=48, filter_size=(3, 3),
     nonlinearity=lasagne.nonlinearities.rectify)
     print(lasagne.layers.get_output_shape(network))
     
@@ -190,10 +216,15 @@ def build_cnn(input_var=None):
     print(lasagne.layers.get_output_shape(network))
 
     network = lasagne.layers.DenseLayer(network,
-    num_units=256,
+    num_units=512,
     nonlinearity=lasagne.nonlinearities.rectify)
     print(lasagne.layers.get_output_shape(network))
 
+    network = lasagne.layers.DenseLayer(network,
+    num_units=512,
+    nonlinearity=lasagne.nonlinearities.rectify)
+    print(lasagne.layers.get_output_shape(network))
+    
     network = lasagne.layers.DenseLayer(network,
     num_units=4,
     nonlinearity=lasagne.nonlinearities.softmax)
@@ -221,8 +252,6 @@ def main():
     images = read_data()
     num_epochs = 100
     data, labels = create_dataset(images)
-    data -= np.mean(data)
-    data = data / np.std(data)
     X_train, y_train, X_val, y_val, X_test, y_test = data_split(data,labels)
     #Create training functions in theano
     input_var = T.tensor4('inputs')
@@ -239,19 +268,17 @@ def main():
 
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = lasagne.updates.nesterov_momentum(
-    loss, params, learning_rate=0.0001, momentum=0.9)
+    loss, params, learning_rate=0.01, momentum=0.9)
 
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
     test_prediction = T.clip(prediction,epsilon,1-epsilon)
     test_loss = lasagne.objectives.categorical_crossentropy(test_prediction,
     target_var)
     test_loss = test_loss.mean()
-    test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var),
-                      dtype=theano.config.floatX)
 
     train_fn = theano.function([input_var, target_var], [loss,prediction], updates=updates)
 
-    val_fn = theano.function([input_var, target_var], [test_loss, test_acc])
+    val_fn = theano.function([input_var, target_var], [test_loss, test_prediction])
     
     # Finally, launch the training loop.
     print("Starting training...")
@@ -261,14 +288,20 @@ def main():
         train_err = 0
         rd_err = 0
         train_batches = 0
+        train_preds = np.zeros((0,4))
+        train_order = np.zeros((0,4))
+        test_preds = np.zeros((0,4))
+        test_order = np.zeros((0,4))
      
         for batch in iterate_minibatches(X_train, y_train, 500, shuffle=True):
             inputs, targets = batch
             rd_err, preds = train_fn(inputs, targets)
+            train_preds = np.concatenate((train_preds,preds))
+            train_order = np.concatenate((train_order,onehot_to_vector(targets)))
             train_batches += 1
             train_err += rd_err
             
-            
+        print("Training ROC: " + str(m.roc_auc_score(train_order,train_preds)))
             
         # And a full pass over the validation data:
         val_err = 0
@@ -276,17 +309,17 @@ def main():
         val_acc = 0
         for batch in iterate_minibatches(X_val, y_val, 500, shuffle=False):
             inputs, targets = batch
-            err, acc = val_fn(inputs, targets)
+            err, preds = val_fn(inputs, targets)
+            test_preds = np.concatenate((test_preds,preds))
+            test_order = np.concatenate((test_order,onehot_to_vector(targets)))
             val_err += err
-            val_acc += acc
             val_batches += 1
         # Then we print the results for this epoch:
         print("Epoch {} of {} Completed".format(
         epoch + 1, num_epochs))
         print(" training loss:\t\t{:.6f}".format(train_err / train_batches))
         print(" validation loss:\t\t{:.6f}".format(val_err / val_batches))
-        print(" validation accuracy:\t\t{:.2f} %".format(
-                 val_acc / val_batches * 100))
+        print("Validation ROC: " + str(m.roc_auc_score(test_order,test_preds)))
     # After training, we compute and print the test error:
     test_err = 0
     test_batches = 0
